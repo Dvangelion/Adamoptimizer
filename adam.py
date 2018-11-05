@@ -18,11 +18,11 @@ class Adam:
 
         self.num_iterations = 1000
 
-    def sigmoid(x):
+    def sigmoid(self, x):
         y = 1.0 / (1.0 + np.exp(-z))
         return y
 
-    def propagate(W,b,X,Y):
+    def propagate(self,W,b,X,Y):
         m = X.shape[1]
         z = np.dot(W.T,X) + b
         A = sigmoid(z)
@@ -36,7 +36,7 @@ class Adam:
 
         return grads, cost
 
-    def compute_grad(W,b,X,Y):
+    def compute_grad(self,W,b,X,Y):
 
         m = X.shape[1]
         z = np.dot(W.T,X) + b
@@ -49,7 +49,7 @@ class Adam:
 
         return grads
 
-    def optimize(W,b,X,Y):
+    def optimize(self,W, b, X, Y):
         alpha = self.alpha
         beta_1 = self.beta_1
         beta_2 = self.beta_2
@@ -63,7 +63,7 @@ class Adam:
         iter = 0
         while  iter < num_iterations:
             iter += 1
-            grads_w, grads_b = compute_grad(W,b,X,Y)['dw'], compute_grad(W,b,X,Y)['db']
+            grads_w, grads_b = self.compute_grad(W,b,X,Y)['dw'], compute_grad(W,b,X,Y)['db']
 
             #Update biased first moment estimate
             momentum_w = beta_1*momentum_w + (1-beta_1)*grads_w
@@ -92,13 +92,13 @@ class Adam:
         params = {"W":W, "b":b}
         return params
 
-    def predict(W,b,X):
+    def predict(self, W,b,X):
 
         m = X.shape[1]
         y_pred = np.zeros((1,m))
         W = W.reshape(X.shape[0],1)
 
-        A = sigmoid(np.dot(W.T, X) + b)
+        A = self.sigmoid(np.dot(W.T, X) + b)
         for i in range(A.shape[1]):
             if A[:,i] > .5:
                 y_pred[:,i] = 1
@@ -107,6 +107,26 @@ class Adam:
 
         return y_pred
 
+    def model(self,X_train, Y_train, X_test, Y_test):
+
+        #initialize parameterss
+        W = np.zeros((X_train.shape[0], 1))
+        b = 0
+
+        params = self.optimize(W, b, X_train, Y_train)
+        W = params['W']
+        b = params['b']
+
+        y_pred_train = self.predict(W,b,X_train)
+        y_pred_test = self.redict(W,b,X_test)
+
+        train_acc = sum(y_pred_train == Y_train) / len(Y_train)
+        test_acc = sum(y_pred_test == Y_test) / len(Y_test)
+
+        print ("Train acc:", train_acc)
+        print ("Test acc:", test_acc)
+
+        return test_acc
 
 
 

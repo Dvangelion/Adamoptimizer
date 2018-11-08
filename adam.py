@@ -1,10 +1,4 @@
-#import tensorflow as tf
 import numpy as np
-
-#mnist = tf.keras.datasets.mnist
-
-#(x_train, y_train), (x_test, y_test) = mnist.load_data()
-#x_train, x_test = x_train / 255.0, x_test / 255.0
 
 
 class Adam:
@@ -16,34 +10,30 @@ class Adam:
         self.beta_1 = .9
         self.beta_2 = .999
 
-        self.num_iterations = 1000
+        self.num_iterations = 20
 
     def sigmoid(self, x):
-        y = 1.0 / (1.0 + np.exp(-z))
+        y = 1.0 / (1.0 + np.exp(-x))
         return y
 
-    def propagate(self,W,b,X,Y):
-        m = X.shape[1]
-        z = np.dot(W.T,X) + b
-        A = sigmoid(z)
-        cost = -1.0/m*np.sum(Y*np.log(A) + (1.0-Y)*np.log(1.0-A))
+    def softmax(self, z):
+        z_exp = np.exp(z)
+        softmax = z_exp/(sum(z_exp))
+        return softmax
 
-        dw = 1.0/m*np.dot(X, (A-Y).T)
-        db = 1.0/m*np.sum(A-Y)
 
-        cost = np.squeeze(cost)
-        grads = {"dw":dw, "db":db}
+    def compute_grad(self, W, b, X, Y):
 
-        return grads, cost
-
-    def compute_grad(self,W,b,X,Y):
+        #print ("W:", W.shape)
+        #print ("X:", X.shape)
 
         m = X.shape[1]
-        z = np.dot(W.T,X) + b
-        A = sigmoid(z)
 
-        dw = 1.0/m*np.dot(X,(A-Y).T)
-        db = 1.0/m*np.sum(A-Y)
+        logits = np.dot(W.T,X) + b
+        O = self.softmax(logits)
+
+        dw = -1.0/m*np.dot(X, (O-Y).T)
+        db = -1.0/m*np.sum(O-Y)
 
         grads = {"dw":dw, "db":db}
 
@@ -63,7 +53,7 @@ class Adam:
         iter = 0
         while  iter < num_iterations:
             iter += 1
-            grads_w, grads_b = self.compute_grad(W,b,X,Y)['dw'], compute_grad(W,b,X,Y)['db']
+            grads_w, grads_b = self.compute_grad(W,b,X,Y)['dw'], self.compute_grad(W,b,X,Y)['db']
 
             #Update biased first moment estimate
             momentum_w = beta_1*momentum_w + (1-beta_1)*grads_w
@@ -86,39 +76,40 @@ class Adam:
             db = alpha*m_hat_b/(np.sqrt(v_hat_b)+eps)
 
             #Update parameters
-            W -= dW
-            b -= db
+            W += dW
+            b += db
 
         params = {"W":W, "b":b}
         return params
 
-    def predict(self, W,b,X):
+    def predict(self, W, b, X):
 
-        m = X.shape[1]
-        y_pred = np.zeros((1,m))
-        W = W.reshape(X.shape[0],1)
+        logit = self.softmax(np.dot(W.T, X) + b)
+        #print(A.shape)
 
-        A = self.sigmoid(np.dot(W.T, X) + b)
-        for i in range(A.shape[1]):
-            if A[:,i] > .5:
-                y_pred[:,i] = 1
-            elif A[:,i] <= .5:
-                y_pred[:,i] = 0
+        y_pred = np.argmax(logit, axis=0)
+        #print (y_pred.shape)
 
         return y_pred
 
     def model(self,X_train, Y_train, X_test, Y_test):
 
         #initialize parameterss
-        W = np.zeros((X_train.shape[0], 1))
-        b = 0
+        W = np.zeros((784,10))
+        b = np.zeros((10,1))
+
+        X_train = X_train.reshape(-1,784)
+        X_train = X_train.T
+        X_test = X_test.reshape(-1,784)
+        X_test = X_test.T
 
         params = self.optimize(W, b, X_train, Y_train)
         W = params['W']
+        print(sum(W))
         b = params['b']
 
         y_pred_train = self.predict(W,b,X_train)
-        y_pred_test = self.redict(W,b,X_test)
+        y_pred_test = self.predict(W,b,X_test)
 
         train_acc = sum(y_pred_train == Y_train) / len(Y_train)
         test_acc = sum(y_pred_test == Y_test) / len(Y_test)
@@ -128,5 +119,9 @@ class Adam:
 
         return test_acc
 
+
+if __name__ == '__main__':
+    Adam = Adam()
+    print(Adam.softmax(np.zeros((3,4))))
 
 

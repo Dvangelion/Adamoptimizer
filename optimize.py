@@ -1,16 +1,18 @@
 import numpy as np
 
 
-class Adam:
+class Optimize:
     def __init__(self):
         #step size
-        self.alpha = .001
-
+        self.alpha = .0001
+	
+	#
+        self.gamma = 0.9
         #exponential decays
         self.beta_1 = .9
         self.beta_2 = .999
 
-        self.num_iterations = 10
+        self.num_iterations = 5
         self.batch_size = 128
 
     def sigmoid(self, x):
@@ -50,8 +52,9 @@ class Adam:
 
         return grads, cost
 
-    def optimize(self, W, b, X, Y, batch_size):
+    def adam_optimize(self, W, b, X, Y, batch_size, xtest, ytest):
         X = X.T
+        xtest = xtest.T
         alpha = self.alpha
         beta_1 = self.beta_1
         beta_2 = self.beta_2
@@ -62,12 +65,15 @@ class Adam:
         v_b = 0
         eps = 1e-8
         costs = []
+        test_costs = []
         iter = 0
         total_batches = len(Y) // batch_size
         while iter < num_iterations:
             iter += 1
             i = 0
             cost = 0
+            grads, test_cost = self.compute_grad(W, b, xtest, ytest)
+            test_costs.append(test_cost)
             p = np.random.permutation(len(X.T))
             X = X[:, p]
             Y = Y[p]
@@ -82,8 +88,9 @@ class Adam:
                 grads_w = grads['dw']
                 grads_b = grads['db']
                 costs.append(batch_cost)
+                #cost += batch_cost
 
-                alpha = alpha / np.sqrt(iter)
+                #alpha = alpha / np.sqrt(i)
 
                 #Update biased first moment estimate
                 momentum_w = beta_1*momentum_w + (1-beta_1)*grads_w
@@ -109,32 +116,116 @@ class Adam:
                 W += dW
                 b += db
 
-            #costs.append(cost/total_batches)
+            #costs.append(batch_cost)
 
 
         costs = np.array(costs)
         params = {"W":W, "b":b}
 
-        return params, costs
+        return params, costs, test_costs
 
-    def grad_optimize(self, W, b, X, Y):
+    def rmsprop_optimize(self, W, b, X, Y, batch_size, xtest, ytest):
         X = X.T
+        xtest = xtest.T
+        alpha = self.alpha
+        gamma = self.gamma
+        num_iterations = self.num_iterations
+        eps = 1e-8
         costs = []
+        test_costs = []
         iter = 0
-        while iter < self.num_iterations:
+        total_batches = len(Y) // batch_size
+        while iter < num_iterations:
             iter += 1
-            grads, cost = self.compute_grad(W, b, X, Y)
-            costs.append(cost)
-            dw = grads['dw']
-            db = grads['db']
+            i = 0
+            cost = 0
+            grads, test_cost = self.compute_grad(W, b, xtest, ytest)
+            test_costs.append(test_cost)
+            cache_w = []
+            cache_b = []
+            p = np.random.permutation(len(X.T))
+            X = X[:, p]
+            Y = Y[p]
 
-            W += self.alpha*dw
-            b += self.alpha*db
+            while i < total_batches:
+
+                batch_X = X[:, i*batch_size:(i+1)*batch_size]
+                batch_Y = Y[i*batch_size:(i+1)*batch_size]
+
+                i += 1
+                grads, batch_cost = self.compute_grad(W, b, batch_X, batch_Y)
+                grads_w = grads['dw']
+                grads_b = grads['db']
+                
+
+                #cache_w.append(grads_w**2)
+                #cache_b.append(grads_b**2)
+                #print (cache_w)
+                MS_w = grads_w**2
+                MS_b = grads_b**2
+
+                MS_w = gamma*MS_w + (1 - gamma)*grads_w**2
+                MS_b = gamma*MS_b + (1 - gamma)*grads_b**2
+                #MS_w = gamma*np.mean(cache_w[:i]) + (1 - gamma)*grads_w**2
+                #MS_b = gamma*np.mean(cache_b[:i]) + (1 - gamma)*grads_b**2
+
+                costs.append(batch_cost)
+                #cost += batch_cost
+
+                #alpha = alpha / np.sqrt(iter)
+
+                #Compute parameters to update
+                dW = alpha*grads_w/(np.sqrt(MS_w + eps))
+                db = alpha*grads_b/(np.sqrt(MS_b + eps))
+
+                #Update parameters
+                W += dW
+                b += db
+
+            #costs.append(batch_cost)
 
 
+        costs = np.array(costs)
         params = {"W":W, "b":b}
 
-        return params, costs
+        return params, costs, test_costs
+
+    def grad_optimize(self, W, b, X, Y, batch_size, xtest, ytest):
+        X = X.T
+        xtest = xtest.T
+        costs = []
+        test_costs = []
+        iter = 0
+        total_batches = len(Y) // batch_size
+        while iter < self.num_iterations:
+            iter += 1
+            i = 0
+            grads, test_cost = self.compute_grad(W, b, xtest, ytest)
+            test_costs.append(test_cost)
+            p = np.random.permutation(len(X.T))
+            X = X[:, p]
+            Y = Y[p]
+            cost = 0
+            while i < total_batches:
+
+                batch_X = X[:, i*batch_size:(i+1)*batch_size]
+                batch_Y = Y[i*batch_size:(i+1)*batch_size]
+                i += 1
+                grads, batch_cost = self.compute_grad(W, b, batch_X, batch_Y)
+                #cost += batch_cost
+                costs.append(batch_cost)
+                dw = grads['dw']
+                db = grads['db']
+
+                W += self.alpha*dw
+                b += self.alpha*db
+
+            #costs.append(batch_cost)
+
+        costs = np.array(costs)
+        params = {"W":W, "b":b}
+
+        return params, costs, test_costs
 
 
 
@@ -148,21 +239,21 @@ class Adam:
         return y_pred
 
 
-    def model(self, X_train, Y_train, X_test, Y_test):
+    def model(self, X_train, Y_train, X_test, Y_test, method='adam'):
         #TODO: add mini batches
         #initialize parameterss
-        W = np.random.rand(784,10)
-        b = np.random.rand(10,1)
+        W = np.zeros((784,10))
+        b = np.zeros((10,1))
 
         X_train = X_train.reshape(-1,784)
         X_test = X_test.reshape(-1,784)
 
         X = X_train
         Y = Y_train
-        
+
         #5-fold cross validation
         index = len(X_train) // 5
-        
+
         X_val = X[:index,:]
         Y_val = Y[:index]
         X_train = X[index:,:]
@@ -173,14 +264,20 @@ class Adam:
         val_costs_list = []
         val_acc_list = []
 
+
         for i in range(5):
+            if method == 'adam':
+                params, train_costs, test_costs = self.adam_optimize(W, b, X_train, Y_train, self.batch_size, X_test, Y_test)
+                val_params, val_costs,test_costs = self.adam_optimize(W, b, X_val, Y_val, self.batch_size, X_test, Y_test)
+            
+            elif method == 'rmsprop':
+                params, train_costs, test_costs = self.rmsprop_optimize(W, b, X_train, Y_train, self.batch_size, X_test, Y_test)
+                val_params, val_costs,test_costs = self.rmsprop_optimize(W, b, X_val, Y_val, self.batch_size, X_test, Y_test)
 
 
-
-
-
-            params, train_costs = self.optimize(W, b, X_train, Y_train, self.batch_size)
-            val_params, val_costs = self.optimize(W, b, X_val, Y_val, self.batch_size)
+            elif method == 'grad':
+                params, train_costs, test_costs = self.grad_optimize(W, b, X_train, Y_train, self.batch_size, X_test, Y_test)
+                val_params, val_costs, test_costs = self.grad_optimize(W, b, X_val, Y_val, self.batch_size, X_test, Y_test)
 
             train_costs_list.append(train_costs)
             val_costs_list.append(val_costs)
@@ -192,8 +289,6 @@ class Adam:
 
             train_acc_list.append(train_acc)
             val_acc_list.append(val_acc)
-
-
 
         train_costs = np.array(train_costs_list)
         val_costs = np.array(val_costs_list)
@@ -220,11 +315,11 @@ class Adam:
         print ("Val acc:", val_acc)
         print ("Test acc:", test_acc)
 
-        return train_costs, val_costs
+        return train_costs, val_costs, test_costs
 
 
 if __name__ == '__main__':
-    Adam = Adam()
-    print(Adam.softmax(np.zeros((3,4))))
+    Optimize = Optimize()
+    print(Optimize.softmax(np.zeros((3,4))))
 
 
